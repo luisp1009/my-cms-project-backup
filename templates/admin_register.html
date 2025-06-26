@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Registration</title>
+</head>
+<body>
+    <h2>Admin Registration</h2>
+    <form method="POST">
+        <input type="text" name="username" placeholder="Admin Username" required><br><br>
+        <input type="password" name="password" placeholder="Admin Password" required><br><br>
+        <button type="submit">Register</button>
+    </form>
+    {% if error %}
+        <p style="color:red;">{{ error }}</p>
+    {% endif %}
+    <br>
+    <br><a href="/admin-login">already a user?</a>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin - Manage Layout</title>
+    <script>
+        function submitForm(event) {
+            event.preventDefault(); // Prevent normal form submission
+
+            const form = document.getElementById('layoutForm');
+            const formData = new FormData(form);
+
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                // After updating, open the website in a new tab
+                window.open('/website/{{ slug }}?t=' + Date.now(), '_blank');
+            });
+        }
+    </script>
+</head>
+<body>
+    <h2>Manage Layout for {{ username }}</h2>
+
+    <form id="layoutForm" method="POST" onsubmit="submitForm(event)">
+    <h4>Select Layout:</h4>
+   <select name="layout">
+    {% for layout in layouts %}
+        <option value="{{ layout }}" {% if content.layout == layout %}selected{% endif %}>
+            {{ layout }}
+        </option>
+    {% endfor %}
+</select>
+<br><br>
+
+    <button type="submit">Update Layout</button>
+</form>
+
+
+    <br><a href="/admin-dashboard">Back to User List</a> | <a href="/admin-logout">Logout</a>
+</body>
+</html>
