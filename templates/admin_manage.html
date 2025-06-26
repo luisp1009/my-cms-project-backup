@@ -24,7 +24,7 @@
     <script>
         function removeField(fieldName) {
             const form = document.getElementById('hiddenRemoveForm');
-            form.action = /admin-remove-field/{{ username }}/${fieldName};
+            form.action = `/admin-remove-field/{{ username }}/${fieldName}`;
             form.submit();
         }
     </script>

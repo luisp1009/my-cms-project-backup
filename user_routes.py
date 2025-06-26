@@ -1,8 +1,11 @@
 import os
-from flask import Blueprint, render_template, request, redirect, session
+from flask import Blueprint, render_template, request, redirect, session, url_for
+from werkzeug.utils import secure_filename
 from db import users_collection, user_sites_collection
 
 user_bp = Blueprint('user', __name__)
+
+UPLOAD_FOLDER = 'static/uploads'
 
 @user_bp.route('/user-register', methods=['GET', 'POST'])
 def user_register():
@@ -60,7 +63,60 @@ def user_dashboard():
     username = session.get('username')
     user_site = user_sites_collection.find_one({'username': username})
 
-    return render_template('user_dashboard.html', content=user_site, username=username)
+    return render_template('user_dashboard.html', content=user_site, username=username, slug=username)
+
+@user_bp.route('/user-update-content/<username>', methods=['POST'])
+def user_update_content(username):
+    if not session.get('user_logged_in'):
+        return redirect('/user-login')
+
+    user_site = user_sites_collection.find_one({'username': username})
+
+    if not user_site:
+        return 'User site not found', 404
+
+    fields = user_site.get('fields', [])
+    updates = {}
+
+    for field in fields:
+        field_name = field['name']
+
+        if field['type'] == 'text':
+            updates[field_name] = request.form.get(field_name, '')
+
+        elif field['type'] == 'multiimage':
+            files = request.files.getlist(field_name)
+            image_paths = []
+
+            for file in files:
+                if file.filename:
+                    filename = secure_filename(file.filename)
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    file.save(filepath)
+                    image_paths.append('/' + filepath)
+
+            if image_paths:
+                updates[field_name] = image_paths
+            else:
+                updates[field_name] = user_site.get(field_name, [])
+
+    user_sites_collection.update_one({'username': username}, {'$set': updates})
+
+    return redirect('/user-dashboard')
+
+@user_bp.route('/user-remove-field/<username>/<field_name>', methods=['POST'])
+def user_remove_field(username, field_name):
+    if not session.get('user_logged_in'):
+        return redirect('/user-login')
+
+    user_site = user_sites_collection.find_one({'username': username})
+
+    if user_site:
+        updated_fields = [field for field in user_site.get('fields', []) if field['name'] != field_name]
+        user_sites_collection.update_one({'username': username}, {'$set': {'fields': updated_fields}})
+        user_sites_collection.update_one({'username': username}, {'$unset': {field_name: ""}})
+
+    return redirect('/user-dashboard')
 
 @user_bp.route('/user-logout')
 def user_logout():
