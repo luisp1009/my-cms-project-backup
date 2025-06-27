@@ -19,17 +19,18 @@
 
     <script>
         function removeField(fieldName) {
-            const form = document.getElementById('hiddenRemoveForm');
-            form.action = `/admin-remove-field/{{ username }}/${fieldName}`;
-            form.submit();
-        }
+    const form = document.getElementById('hiddenRemoveForm');
+    form.action = `/admin-remove-field/{{ username }}/${fieldName}`;
+    form.submit();
+}
 
-        function updateLocation(fieldName) {
-            const selectedLocation = document.getElementById('locationSelect_' + fieldName).value;
-            const form = document.getElementById('hiddenLocationForm');
-            form.action = `/admin-update-location/{{ username }}/${fieldName}/${selectedLocation}`;
-            form.submit();
-        }
+function updateLocation(fieldName) {
+    const selectedLocation = document.getElementById('locationSelect_' + fieldName).value;
+    const form = document.getElementById('hiddenLocationForm');
+    form.action = `/admin-update-location/{{ username }}/${fieldName}/${selectedLocation}`;
+    form.submit();
+}
+
 
         function filterFields() {
             const selectedCategory = document.getElementById('categoryFilter').value;
