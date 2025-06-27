@@ -1,42 +1,193 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Admin - Manage Layout</title>
-    <script>
-        function submitForm(event) {
-            event.preventDefault(); // Prevent normal form submission
-
-            const form = document.getElementById('layoutForm');
-            const formData = new FormData(form);
-
-            fetch(window.location.href, {
-                method: 'POST',
-                body: formData
-            }).then(response => {
-                // After updating, open the website in a new tab
-                window.open('/website/{{ slug }}?t=' + Date.now(), '_blank');
-            });
+    <title>Manage {{ username }}</title>
+    <style>
+        .field-container { margin-bottom: 30px; }
+        .remove-button {
+            background-color: red;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            cursor: pointer;
+            margin-left: 10px;
         }
+        .cke_notification_warning { display: none !important; }
+    </style>
+
+    <script src="https://cdn.ckeditor.com/4.20.2/standard/ckeditor.js"></script>
+
+    <script>
+        function removeField(fieldName) {
+            const form = document.getElementById('hiddenRemoveForm');
+            form.action = `/admin-remove-field/{{ username }}/${fieldName}`;
+            form.submit();
+        }
+
+        function updateLocation(fieldName) {
+            const selectedLocation = document.getElementById('locationSelect_' + fieldName).value;
+            const form = document.getElementById('hiddenLocationForm');
+            form.action = `/admin-update-location/{{ username }}/${fieldName}/${selectedLocation}`;
+            form.submit();
+        }
+
+        function filterFields() {
+            const selectedCategory = document.getElementById('categoryFilter').value;
+            document.getElementById('hiddenSelectedCategory').value = selectedCategory;
+
+            const allFields = document.getElementsByClassName('field-container');
+            for (let field of allFields) {
+                if (selectedCategory === 'all' || field.getAttribute('data-location') === selectedCategory) {
+                    field.style.display = 'block';
+                } else {
+                    field.style.display = 'none';
+                }
+            }
+        }
+
+        window.onload = function () {
+            var container = document.getElementById('ckeditor-container');
+            var editors = JSON.parse(container.getAttribute('data-editors'));
+
+            editors.forEach(function (editorId) {
+                if (document.getElementById(editorId)) {
+                    CKEDITOR.replace(editorId);
+                }
+            });
+
+            filterFields();
+        };
     </script>
 </head>
 <body>
-    <h2>Manage Layout for {{ username }}</h2>
+    <h2>Managing: {{ username }}</h2>
 
-    <form id="layoutForm" method="POST" onsubmit="submitForm(event)">
-    <h4>Select Layout:</h4>
-   <select name="layout">
-    {% for layout in layouts %}
-        <option value="{{ layout }}" {% if content.layout == layout %}selected{% endif %}>
-            {{ layout }}
-        </option>
-    {% endfor %}
-</select>
-<br><br>
+    <!-- Layout Selection -->
+    <h3>Select Layout</h3>
+    <form method="POST" action="/admin-update-layout/{{ username }}">
+        <select name="layout">
+            {% for layout in layouts %}
+                <option value="{{ layout }}" {% if content.layout == layout %}selected{% endif %}>{{ layout }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit">Update Layout</button>
+    </form>
 
-    <button type="submit">Update Layout</button>
-</form>
+    <hr>
 
+    <!-- Create New Section -->
+    <h3>Create New Section</h3>
+    <form method="POST" action="/admin-add-section/{{ username }}">
+        <input type="text" name="new_section" placeholder="e.g. Custom Section" required><br><br>
+        <button type="submit">Add Section</button>
+    </form>
+
+    <h3>Current Sections</h3>
+    <ul>
+        {% for section in content.sections %}
+            <li>
+                {{ section }}
+                <form method="POST" action="/admin-remove-section/{{ username }}/{{ section }}" style="display:inline;">
+                    <button type="submit" class="remove-button">Remove</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <hr>
+
+    <!-- Add New Field -->
+    <h3>Add New Field</h3>
+    <form method="POST" action="/admin-add-field/{{ username }}">
+        <label>Select Field Type:</label><br>
+        <select name="new_field_type">
+            <option value="text">Text</option>
+            <option value="multiimage">Image</option>
+        </select><br><br>
+
+        <label>Field Name:</label><br>
+        <input type="text" name="new_field_name" placeholder="e.g. About Us Section" required><br><br>
+
+        <label>Assign Location:</label><br>
+        <select name="field_location">
+            {% for section in content.sections %}
+                <option value="{{ section }}">{{ section }}</option>
+            {% endfor %}
+        </select><br><br>
+
+        <button type="submit">Add Field</button>
+    </form>
+
+    <hr>
+
+    <!-- Filter Fields -->
+    <h3>Filter Fields by Section</h3>
+    <select id="categoryFilter" name="selected_category" onchange="filterFields()">
+        <option value="all" {% if selected_category == 'all' %}selected{% endif %}>Show All</option>
+        {% for section in content.sections %}
+            <option value="{{ section }}" {% if selected_category == section %}selected{% endif %}>{{ section }}</option>
+        {% endfor %}
+    </select>
+
+    <hr>
+
+    <!-- Edit Content -->
+    <h3>Edit Content</h3>
+    <form method="POST" enctype="multipart/form-data" action="/admin-update-content/{{ username }}">
+        <input type="hidden" id="hiddenSelectedCategory" name="selected_category" value="{{ selected_category }}">
+
+        <div id="ckeditor-container" data-editors='[
+            {% for field in content.fields if field.type == "text" %}
+                "editor_{{ field.name }}"{% if not loop.last %}, {% endif %}
+            {% endfor %}
+        ]'>
+
+            {% for field in content.fields %}
+                <div class="field-container" data-location="{{ field.location }}">
+                    <label>{{ field.name }}</label><br>
+
+                    <!-- Location Dropdown -->
+                    <select id="locationSelect_{{ field.name }}" onchange="updateLocation('{{ field.name }}')">
+                        {% for section in content.sections %}
+                            <option value="{{ section }}" {% if field.location == section %}selected{% endif %}>{{ section }}</option>
+                        {% endfor %}
+                    </select><br><br>
+
+                    {% if field.type == 'text' %}
+                        <textarea name="{{ field.name }}" id="editor_{{ field.name }}" rows="5" cols="50">{{ content.get(field.name, '') }}</textarea>
+                    {% elif field.type == 'multiimage' %}
+                        <input type="file" name="{{ field.name }}" multiple><br><br>
+
+                        {% if content.get(field.name) %}
+                            <h5>Current Images:</h5>
+                            {% for img in content.get(field.name, []) %}
+                                <img src="{{ img }}" width="200"><br>
+                            {% endfor %}
+                            <br>
+                        {% endif %}
+                    {% endif %}
+
+                    <button type="button" class="remove-button" onclick="removeField('{{ field.name }}')">Remove</button>
+
+                    <!-- Rename Field -->
+                    <form method="POST" action="/admin-rename-field/{{ username }}/{{ field.name }}" style="margin-top:10px;">
+                        <input type="text" name="new_field_name" placeholder="New Field Name" required>
+                        <button type="submit">Rename</button>
+                    </form>
+                </div>
+                <hr>
+            {% endfor %}
+        </div>
+
+        <button type="submit">Update Content</button>
+
+        <a href="/website/{{ username }}" target="_blank" style="margin-left: 20px;">View Website</a>
+    </form>
+
+    <form id="hiddenRemoveForm" method="POST" style="display: none;"></form>
+    <form id="hiddenLocationForm" method="POST" style="display: none;"></form>
 
     <br><a href="/admin-dashboard">Back to User List</a> | <a href="/admin-logout">Logout</a>
+
 </body>
 </html>

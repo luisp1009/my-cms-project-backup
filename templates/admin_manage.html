@@ -1,24 +1,23 @@
+<!DOCTYPE html>
 <html>
 <head>
     <title>Manage {{ username }}</title>
     <style>
-        .field-container {
-            margin-bottom: 30px;
-        }
-        .remove-button {
+        .field-container { margin-bottom: 30px; }
+        .inline-buttons { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+        .remove-button, .rename-button {
             background-color: red;
             color: white;
             border: none;
             padding: 5px 10px;
             cursor: pointer;
-            margin-left: 10px;
         }
-        .cke_notification_warning {
-            display: none !important;
+        .rename-button {
+            background-color: green;
         }
+        .cke_notification_warning { display: none !important; }
     </style>
 
-    <!-- Load CKEditor 4 -->
     <script src="https://cdn.ckeditor.com/4.20.2/standard/ckeditor.js"></script>
 
     <script>
@@ -27,12 +26,49 @@
             form.action = `/admin-remove-field/{{ username }}/${fieldName}`;
             form.submit();
         }
+
+        function updateLocation(fieldName) {
+            const selectedLocation = document.getElementById('locationSelect_' + fieldName).value;
+            const form = document.getElementById('hiddenLocationForm');
+            form.action = `/admin-update-location/{{ username }}/${fieldName}/${selectedLocation}`;
+            form.submit();
+        }
+
+        function confirmRemoveSection(sectionName) {
+            return confirm(`Are you sure you want to remove the section "${sectionName}"? This will remove the section even if it has content.`);
+        }
+
+        function renameField(fieldName) {
+            const newName = document.getElementById('renameInput_' + fieldName).value;
+            if (!newName) {
+                alert('Please enter a new field name.');
+                return;
+            }
+            const form = document.getElementById('hiddenRenameForm');
+            form.action = `/admin-rename-field/{{ username }}/${fieldName}`;
+
+            const input = document.getElementById('renameHiddenInput');
+            input.value = newName;
+
+            form.submit();
+        }
+
+        window.onload = function () {
+            var container = document.getElementById('ckeditor-container');
+            var editors = JSON.parse(container.getAttribute('data-editors'));
+
+            editors.forEach(function (editorId) {
+                if (document.getElementById(editorId)) {
+                    CKEDITOR.replace(editorId);
+                }
+            });
+        };
     </script>
 </head>
 <body>
     <h2>Managing: {{ username }}</h2>
 
-    <!-- Layout Selection -->
+    <!-- Select Layout -->
     <h3>Select Layout</h3>
     <form method="POST" action="/admin-update-layout/{{ username }}">
         <select name="layout">
@@ -45,6 +81,27 @@
 
     <hr>
 
+    <!-- Create New Section -->
+    <h3>Create New Section</h3>
+    <form method="POST" action="/admin-add-section/{{ username }}">
+        <input type="text" name="new_section" placeholder="e.g. Custom Section" required><br><br>
+        <button type="submit">Add Section</button>
+    </form>
+
+    <h3>Current Sections</h3>
+    <ul>
+        {% for section in content.sections %}
+            <li>
+                {{ section }}
+                <form method="POST" action="/admin-remove-section/{{ username }}/{{ section }}" style="display:inline;" onsubmit="return confirmRemoveSection('{{ section }}');">
+                    <button type="submit" class="remove-button">Remove</button>
+                </form>
+            </li>
+        {% endfor %}
+    </ul>
+
+    <hr>
+
     <!-- Add New Field -->
     <h3>Add New Field</h3>
     <form method="POST" action="/admin-add-field/{{ username }}">
@@ -54,25 +111,56 @@
             <option value="multiimage">Image</option>
         </select><br><br>
 
-        <label>Field Name (will also be used in layout):</label><br>
+        <label>Field Name:</label><br>
         <input type="text" name="new_field_name" placeholder="e.g. About Us Section" required><br><br>
+
+        <label>Assign Location:</label><br>
+        <select name="field_location">
+            {% for section in content.sections %}
+                <option value="{{ section }}">{{ section }}</option>
+            {% endfor %}
+        </select><br><br>
 
         <button type="submit">Add Field</button>
     </form>
 
     <hr>
 
+    <!-- Filter Fields -->
+    <h3>Filter Fields by Section</h3>
+    <form method="GET" action="/admin-manage/{{ username }}">
+        <select id="categoryFilter" name="selected" onchange="this.form.submit()">
+            <option value="all" {% if selected_category == 'all' %}selected{% endif %}>Show All</option>
+            {% for section in content.sections %}
+                <option value="{{ section }}" {% if selected_category == section %}selected{% endif %}>{{ section }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <hr>
+
     <!-- Edit Content -->
     <h3>Edit Content</h3>
-    <form method="POST" enctype="multipart/form-data" action="/admin-update-content/{{ username }}">
+    <form id="updateContentForm" method="POST" enctype="multipart/form-data" action="/admin-update-content/{{ username }}">
+        <input type="hidden" name="selected_category" value="{{ selected_category }}">
+
         <div id="ckeditor-container" data-editors='[
             {% for field in content.fields if field.type == "text" %}
                 "editor_{{ field.name }}"{% if not loop.last %}, {% endif %}
             {% endfor %}
         ]'>
+
             {% for field in content.fields %}
-                <div class="field-container">
+                {% if selected_category == 'all' or field.location == selected_category %}
+                <div class="field-container" data-location="{{ field.location }}">
                     <label>{{ field.name }}</label><br>
+
+                    <!-- Location Dropdown -->
+                    <select id="locationSelect_{{ field.name }}" onchange="updateLocation('{{ field.name }}')">
+                        {% for section in content.sections %}
+                            <option value="{{ section }}" {% if field.location == section %}selected{% endif %}>{{ section }}</option>
+                        {% endfor %}
+                    </select><br><br>
 
                     {% if field.type == 'text' %}
                         <textarea name="{{ field.name }}" id="editor_{{ field.name }}" rows="5" cols="50">{{ content.get(field.name, '') }}</textarea>
@@ -88,36 +176,31 @@
                         {% endif %}
                     {% endif %}
 
-                    <button type="button" class="remove-button" onclick="removeField('{{ field.name }}')">Remove</button>
+                    <div class="inline-buttons">
+                        <button type="button" class="remove-button" onclick="removeField('{{ field.name }}')">Remove</button>
+
+                        <input type="text" id="renameInput_{{ field.name }}" placeholder="New Field Name">
+                        <button type="button" class="rename-button" onclick="renameField('{{ field.name }}')">Rename</button>
+                    </div>
                 </div>
                 <hr>
+                {% endif %}
             {% endfor %}
         </div>
 
         <button type="submit">Update Content</button>
 
-        <!-- 🔗 View Website Link -->
         <a href="/website/{{ username }}" target="_blank" style="margin-left: 20px;">View Website</a>
     </form>
 
-    <!-- Hidden Remove Field Form -->
+    <!-- Hidden Forms -->
     <form id="hiddenRemoveForm" method="POST" style="display: none;"></form>
+    <form id="hiddenLocationForm" method="POST" style="display: none;"></form>
+    <form id="hiddenRenameForm" method="POST" style="display: none;">
+        <input type="hidden" id="renameHiddenInput" name="new_field_name">
+    </form>
 
     <br><a href="/admin-dashboard">Back to User List</a> | <a href="/admin-logout">Logout</a>
-
-    <!-- ✅ Initialize CKEditor from data-editors -->
-    <script>
-        window.onload = function () {
-            var container = document.getElementById('ckeditor-container');
-            var editors = JSON.parse(container.getAttribute('data-editors'));
-
-            editors.forEach(function(editorId) {
-                if (document.getElementById(editorId)) {
-                    CKEDITOR.replace(editorId);
-                }
-            });
-        };
-    </script>
 
 </body>
 </html>
